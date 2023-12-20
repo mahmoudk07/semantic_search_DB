@@ -8,9 +8,24 @@ import faiss
 
 
 BITS2DTYPE = {
-    8: np.uint8,   ## nbits  we will use 16 or 32
+    ## our nbits
+    8: np.uint8,
+    9: np.uint16,
+    10:np.uint16,  
+    11:np.uint16,
+    12:np.uint16,
+    13:np.uint16,
+    14:np.uint16,
+    15:np.uint16,
     16:np.uint16,
-    32:np.uint32,
+    17:np.uint32,
+    18:np.uint32,
+    19:np.uint32,
+    20:np.uint32,
+    21:np.uint32,
+    22:np.uint32,
+    23:np.uint32,
+    24:np.uint32,
 }
 
 
@@ -191,20 +206,43 @@ class CustomIndexPQ:
         return distances, indices
     
     
-    
+## database load & query load    
 query_vector =  np.random.rand(1, 70).astype(np.float32)
 data = np.load('vectorsdata.npy')
-index = faiss.IndexFlatIP(data.shape[1])
-index.add(data)
-distances, indices = index.search(query_vector, 20)
 
-indexx= CustomIndexPQ(d=70, m=10, nbits=16,init='random',max_iter=20)
+## distances from query real approach 
+distances = np.linalg.norm(data[:, :] - query_vector, axis=1)
 
+## nearest indices from query real approach 
+sorted_indices = np.argsort(distances)
+
+vectors = data[sorted_indices]
+sorted_dist=distances[sorted_indices] 
+
+## initialize our pQ
+index= CustomIndexPQ(d=70, m=14, nbits=11,init='random',max_iter=20)
+
+## Train our pQ
 index.train(data)
+
+## Add data to pq to build table
 index.add(data)
-dist,idices= index.search(query_vector , 20)
+
+## Add data to pq to build table
+distance_PQ,indices_PQ= index.search(query_vector , 20)
+
+real_indices=sorted_indices[0:20]
+is_in_sorted = np.isin(indices_PQ, real_indices)
+
+count_found = np.count_nonzero(is_in_sorted)
+print(f"Values found in sorted_indices: {count_found}")
 
 
+
+
+
+
+##code to generate and  save to file
 """vectors = np.random.rand(20000000, 70).astype(np.float32)"""
 """
 vectors = np.random.rand(200000, 70).astype(np.float32)
