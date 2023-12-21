@@ -1,11 +1,3 @@
-from __future__ import annotations
-
-
-import numpy as np
-from sklearn.cluster import KMeans
-from sklearn.metrics.pairwise import euclidean_distances
-import faiss 
-
 
 BITS2DTYPE = {
     ## our nbits
@@ -93,8 +85,8 @@ class CustomIndexPQ:
         for i in range(self.m):
             estimator = self.estimators[i]  ## bngeeb kol kmean
             X_i = X[:, i * self.ds : (i + 1) * self.ds]
-
-            estimator.fit(X_i)
+            X_GPU = cp.asarray(X_i)
+            estimator.fit(X_GPU.get())
 
         self.is_trained = True
 
@@ -119,7 +111,7 @@ class CustomIndexPQ:
             estimator = self.estimators[i]
             X_i = X[:, i * self.ds : (i + 1) * self.ds]
             result[:, i] = estimator.predict(X_i)
-
+        np.save('resultdata.npy', result)
         return result     ### codes table
 
     def add(self, X: np.ndarray) -> None:
@@ -194,6 +186,8 @@ class CustomIndexPQ:
         indices
             Array of shape `(n_queries, k)`.
         """
+        start_time = time.time()
+        print(f"start_time = {start_time}")
         n_queries = len(X)
         distances_all = self.compute_asymmetric_distances(X)
 
@@ -202,6 +196,9 @@ class CustomIndexPQ:
         distances = np.empty((n_queries, k), dtype=np.float32)
         for i in range(n_queries):
             distances[i] = distances_all[i][indices[i]]
+        end_time = time.time()
+        print(f"end_time = {end_time}")
+        print(f"elapsed time: {end_time - start_time}")
 
         return distances, indices
     
@@ -220,7 +217,7 @@ vectors = data[sorted_indices]
 sorted_dist=distances[sorted_indices] 
 
 ## initialize our pQ
-index= CustomIndexPQ(d=70, m=14, nbits=11,init='random',max_iter=20)
+index= CustomIndexPQ(d=70, m = 14, nbits = 16,init='random',max_iter=20)
 
 ## Train our pQ
 index.train(data)
@@ -229,9 +226,11 @@ index.train(data)
 index.add(data)
 
 ## Add data to pq to build table
-distance_PQ,indices_PQ= index.search(query_vector , 20)
-
-real_indices=sorted_indices[0:20]
+start_time = time.time()
+distance_PQ,indices_PQ= index.search(query_vector , 10)
+end_time = time.time()
+print(f"elapsed time: {end_time - start_time}")
+real_indices=sorted_indices[0:30]
 is_in_sorted = np.isin(indices_PQ, real_indices)
 
 count_found = np.count_nonzero(is_in_sorted)
@@ -243,14 +242,6 @@ print(f"Values found in sorted_indices: {count_found}")
 
 
 ##code to generate and  save to file
-"""vectors = np.random.rand(20000000, 70).astype(np.float32)"""
-"""
-vectors = np.random.rand(200000, 70).astype(np.float32)
-
-# Save to a .npy file
-np.save('vectorsdata.npy', vectors)
-
-"""
-
+# vectors = np.random.rand(20000000, 70).astype(np.float32)
 
 
