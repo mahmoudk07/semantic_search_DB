@@ -162,8 +162,9 @@ class VecDB:
         for i in range(self.m):
             X_i = X[:, i * self.ds : (i + 1) * self.ds]  # (n_queries, ds)
             centers = self.estimators[i].cluster_centers_  # (k, ds)
-            #distance_table[:, i, :] = euclidean_distances(X_i, centers, squared=True)
-            distance_table[:, i, :] = np.sqrt(np.sum(np.square(euclidean_distances(X_i, centers)), axis=-1))
+            distance_table[:, i, :] = euclidean_distances(
+                X_i, centers, squared=True
+            )
 
         distances = np.zeros((n_queries, n_codes), dtype=self.dtype_orig)
 
