@@ -240,7 +240,8 @@ class VecDB:
             distances_all = self.compute_asymmetric_distances_2(X)
         
         indices = np.argsort(distances_all, axis=1)[:, :k]
-        return indices.tolist()
+        flattened_indices = [index for sublist in indices for index in sublist]
+        return flattened_indices
             
         """
             distances = np.empty((n_queries, k), dtype=np.float32)
