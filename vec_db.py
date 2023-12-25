@@ -213,7 +213,7 @@ class VecDB:
         return distances
             
 
-    def retrive(self, X: np.ndarray, k: int) -> tuple:
+    def retrive(self, X: np.ndarray, k: int)  :
         """Find k closest database codes to given queries.
 
         Parameters
@@ -242,6 +242,7 @@ class VecDB:
         indices = np.argsort(distances_all, axis=1)[:, :k]
         flattened_indices = [index for sublist in indices for index in sublist]
         return flattened_indices
+       
             
         """
             distances = np.empty((n_queries, k), dtype=np.float32)
@@ -261,52 +262,3 @@ class VecDB:
 
         
         
-        
-        
-
-"""   
-## database load & query load    
-query_vector =  np.random.rand(1, 70).astype(np.float32)
-data = np.load('vectorsdata.npy')
-
-## distances from query real approach 
-distances = np.linalg.norm(data[:, :] - query_vector, axis=1)
-
-## nearest indices from query real approach 
-sorted_indices = np.argsort(distances)
-
-vectors = data[sorted_indices]
-sorted_dist=distances[sorted_indices] 
-
-data = [{"id": i, "embed": list(row)} for i, row in enumerate(data)]
-## initialize our pQ
-index= CustomIndexPQ(file_path="15milion",new_db=False)
-
-#index.insert_records(data)
-## Train our pQ
-
-
-## Add data to pq to build table
-start_time = time.time()
-indices_PQ= index.retrive(query_vector , 10)
-end_time = time.time()
-print(f"elapsed time: {end_time - start_time}")
-real_indices=sorted_indices[0:30]
-is_in_sorted = np.isin(indices_PQ, real_indices)
-
-count_found = np.count_nonzero(is_in_sorted)
-print(f"Values found in sorted_indices: {count_found}")
-
-"""
-
-
-
-
-##code to generate and  save to file
-"""
-import numpy as np
-np.random.seed(50)
-vectors = np.random.rand(15000000, 70).astype(np.float32)
-np.save('vectorsdata.npy', vectors)
-"""
-
