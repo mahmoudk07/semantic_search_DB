@@ -213,7 +213,7 @@ class VecDB:
         return distances
             
 
-    def retrive(self, X: np.ndarray, k: int) -> list:
+    def retrive(self, X: np.ndarray, k: int) -> tuple:
         """Find k closest database codes to given queries.
 
         Parameters
@@ -240,7 +240,7 @@ class VecDB:
             distances_all = self.compute_asymmetric_distances_2(X)
         
         indices = np.argsort(distances_all, axis=1)[:, :k]
-        return list(indices)
+        return tuple(indices)
             
         """
             distances = np.empty((n_queries, k), dtype=np.float32)
