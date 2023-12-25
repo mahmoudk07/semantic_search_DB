@@ -263,7 +263,7 @@ class VecDB:
         
         
         
-    
+
 """   
 ## database load & query load    
 query_vector =  np.random.rand(1, 70).astype(np.float32)
