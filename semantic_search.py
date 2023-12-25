@@ -1,4 +1,6 @@
-
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics.pairwise import euclidean_distances
 BITS2DTYPE = {
     ## our nbits
     8: np.uint8,
@@ -21,7 +23,7 @@ BITS2DTYPE = {
 }
 
 
-class CustomIndexPQ:
+class VecDB:
     """Custom IndexPQ implementation.
 
     Parameters
@@ -43,10 +45,13 @@ class CustomIndexPQ:
 
     def __init__(
         self,
-        d: int,
-        m: int,
-        nbits: int,
-        **estimator_kwargs: str | int,
+        file_path:str="PATH_DB_10K", 
+        new_db:bool=True,
+        d:int=70,
+        nbits:int=13,
+        m:int=14,
+         
+        
     ) -> None:
         if d % m != 0:
             raise ValueError("d needs to be a multiple of m")
@@ -58,9 +63,10 @@ class CustomIndexPQ:
         self.k = 2**nbits
         self.d = d
         self.ds = d // m  ## 3dd variables fe subvector 
-
+        self.file_path=file_path
+        self.new_db=new_db
         self.estimators = [
-            KMeans(n_clusters=self.k, **estimator_kwargs) for _ in range(m) ## Kmeans lkol subvector
+            KMeans(n_clusters=self.k, init='random',max_iter=20) for _ in range(m) ## Kmeans lkol subvector
         ]
 
         self.is_trained = False
@@ -85,8 +91,8 @@ class CustomIndexPQ:
         for i in range(self.m):
             estimator = self.estimators[i]  ## bngeeb kol kmean
             X_i = X[:, i * self.ds : (i + 1) * self.ds]
-            X_GPU = cp.asarray(X_i)
-            estimator.fit(X_GPU.get())
+            
+            estimator.fit(X_i)
 
         self.is_trained = True
 
@@ -166,8 +172,48 @@ class CustomIndexPQ:
             distances += distance_table[:, i, self.codes[:, i]]
 
         return distances
+    def compute_asymmetric_distances_2(self, X: np.ndarray) -> np.ndarray:
+        """Compute asymmetric distances to all database codes.
 
-    def search(self, X: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+        Parameters
+        ----------
+        X
+            Array of shape `(n_queries, d)` of dtype `np.float32`.
+
+        Returns
+        -------
+        distances
+            Array of shape `(n_queries, n_codes)` of dtype `np.float32`.
+
+        """
+       
+
+        n_queries = len(X)
+
+
+        distance_table = np.empty(
+            (n_queries, 10, 2**16), dtype=self.dtype_orig
+        )  # (n_queries, m, k)
+        center=np.load(self.file_path+'/centroids.npy').astype(np.float32)
+        for i in range(10):
+            X_i = X[:, i * 7 : (i + 1) * 7]  # (n_queries, ds)
+            centers = center[i]  # (k, ds)
+            distance_table[:, i, :] = euclidean_distances(
+                X_i, centers, squared=True
+            )
+        del center, centers
+        codes=np.load(self.file_path+'/codes.npy').astype(np.uint16)
+        n_codes = len(codes)
+
+        distances = np.zeros((n_queries, n_codes), dtype=self.dtype_orig)
+
+        for i in range(10):
+            distances += distance_table[:, i, codes[:, i]]
+
+        return distances
+            
+
+    def retrive(self, X: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
         """Find k closest database codes to given queries.
 
         Parameters
@@ -186,23 +232,38 @@ class CustomIndexPQ:
         indices
             Array of shape `(n_queries, k)`.
         """
-        start_time = time.time()
-        print(f"start_time = {start_time}")
+
         n_queries = len(X)
-        distances_all = self.compute_asymmetric_distances(X)
-
+        if(self.new_db):
+            distances_all = self.compute_asymmetric_distances(X)
+        else:
+            distances_all = self.compute_asymmetric_distances_2(X)
+        
         indices = np.argsort(distances_all, axis=1)[:, :k]
-
-        distances = np.empty((n_queries, k), dtype=np.float32)
-        for i in range(n_queries):
-            distances[i] = distances_all[i][indices[i]]
-        end_time = time.time()
-        print(f"end_time = {end_time}")
-        print(f"elapsed time: {end_time - start_time}")
-
-        return distances, indices
+        return indices
+            
+        """
+            distances = np.empty((n_queries, k), dtype=np.float32)
+            for i in range(n_queries):
+                distances[i] = distances_all[i][indices[i]]
+        """
+        
+        
+            
     
     
+    
+    def insert_records(self,records_dict):
+        extracted_vectors = np.array([record["embed"] for record in records_dict], dtype=np.float32)
+        self.train( extracted_vectors)
+        self.add(extracted_vectors)
+
+        
+        
+        
+        
+    
+ """   
 ## database load & query load    
 query_vector =  np.random.rand(1, 70).astype(np.float32)
 data = np.load('vectorsdata.npy')
@@ -216,18 +277,17 @@ sorted_indices = np.argsort(distances)
 vectors = data[sorted_indices]
 sorted_dist=distances[sorted_indices] 
 
+data = [{"id": i, "embed": list(row)} for i, row in enumerate(data)]
 ## initialize our pQ
-index= CustomIndexPQ(d=70, m = 14, nbits = 16,init='random',max_iter=20)
+index= CustomIndexPQ(file_path="15milion",new_db=False)
 
+#index.insert_records(data)
 ## Train our pQ
-index.train(data)
 
-## Add data to pq to build table
-index.add(data)
 
 ## Add data to pq to build table
 start_time = time.time()
-distance_PQ,indices_PQ= index.search(query_vector , 10)
+indices_PQ= index.retrive(query_vector , 10)
 end_time = time.time()
 print(f"elapsed time: {end_time - start_time}")
 real_indices=sorted_indices[0:30]
@@ -236,12 +296,16 @@ is_in_sorted = np.isin(indices_PQ, real_indices)
 count_found = np.count_nonzero(is_in_sorted)
 print(f"Values found in sorted_indices: {count_found}")
 
-
+"""
 
 
 
 
 ##code to generate and  save to file
-# vectors = np.random.rand(20000000, 70).astype(np.float32)
-
+"""
+import numpy as np
+np.random.seed(50)
+vectors = np.random.rand(15000000, 70).astype(np.float32)
+np.save('vectorsdata.npy', vectors)
+"""
 
